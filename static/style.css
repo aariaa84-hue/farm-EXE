@@ -1,0 +1,32 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f7fb;
+  color: #172033;
+}
+body { margin: 0; }
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 28px 36px; background: white; border-bottom: 1px solid #e6eaf2;
+}
+h1 { margin: 0; font-size: 28px; }
+p { color: #667085; }
+main {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 18px; padding: 24px;
+}
+.card {
+  background: white; border: 1px solid #e6eaf2; border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .06); padding: 20px;
+}
+label { display: block; margin: 12px 0; font-weight: 650; }
+input, select, textarea {
+  width: 100%; box-sizing: border-box; margin-top: 6px; padding: 11px 12px;
+  border: 1px solid #ccd5e1; border-radius: 10px; font-size: 14px;
+}
+textarea { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+button {
+  border: 0; border-radius: 12px; padding: 11px 16px; margin: 6px 6px 6px 0;
+  background: #315efb; color: white; cursor: pointer; font-weight: 700;
+}
+button:hover { filter: brightness(.95); }
+small { display: block; color: #667085; margin-top: 8px; }
