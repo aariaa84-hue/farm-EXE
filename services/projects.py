@@ -36,12 +36,14 @@ def list_projects() -> List[Dict[str, Any]]:
     for file in sorted(PROJECT_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             item = json.loads(file.read_text(encoding="utf-8"))
-            rows.append({
-                "id": item.get("id"),
-                "title": item.get("title") or item.get("topic") or file.stem,
-                "updated_at": item.get("updated_at", ""),
-                "path": str(file),
-            })
+            rows.append(
+                {
+                    "id": item.get("id"),
+                    "title": item.get("title") or item.get("topic") or file.stem,
+                    "updated_at": item.get("updated_at", ""),
+                    "path": str(file),
+                }
+            )
         except json.JSONDecodeError:
             continue
     return rows

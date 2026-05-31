@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict
-import os
 import sys
 import threading
 import webbrowser
@@ -13,6 +12,7 @@ from services.ai import generate_metadata, generate_script, generate_visual_prom
 from services.config import load_settings, save_settings
 from services.media import build_srt, export_markdown
 from services.projects import list_projects, save_project
+from services.tts import get_tts_status
 
 
 def resource_path(relative: str) -> str:
@@ -43,7 +43,25 @@ def api_settings_get():
 def api_settings_post():
     payload = request.get_json(force=True, silent=True) or {}
     save_settings(payload)
-    return jsonify({"ok": True, "settings": load_settings(mask=True)})
+    return jsonify({"ok": True, "settings": load_settings(mask=True), "tts": get_tts_status()})
+
+
+@app.get("/api/tts/status")
+def api_tts_status():
+    return jsonify(get_tts_status())
+
+
+@app.post("/api/tts")
+def api_tts():
+    status = get_tts_status()
+    if not status["enabled"]:
+        return jsonify(status), 400
+    return jsonify(
+        {
+            "enabled": True,
+            "message": "ElevenLabs API 키가 저장되어 있습니다. 이 클린룸 MVP에서는 실제 음성 생성 대신 프로젝트 내보내기 자료를 먼저 준비합니다.",
+        }
+    )
 
 
 @app.get("/api/projects")

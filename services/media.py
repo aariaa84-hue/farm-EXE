@@ -11,6 +11,9 @@ def seconds_to_srt_time(value: float) -> str:
     minutes = int((value % 3600) // 60)
     seconds = int(value % 60)
     millis = int(round((value - math.floor(value)) * 1000))
+    if millis == 1000:
+        seconds += 1
+        millis = 0
     return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
 
 
@@ -52,14 +55,14 @@ def export_markdown(project: Dict, path: Path) -> Path:
     if prompts:
         lines.append("## 비주얼 프롬프트")
         lines.append("")
-        for p in prompts:
-            lines.append(f"- Scene {p.get('no')}: {p.get('prompt')}")
+        for prompt in prompts:
+            lines.append(f"- Scene {prompt.get('no')}: {prompt.get('prompt')}")
     if metadata:
         lines.append("")
         lines.append("## 메타데이터")
         lines.append("")
-        for title in metadata.get("titles", []):
-            lines.append(f"- 제목 후보: {title}")
+        for item in metadata.get("titles", []):
+            lines.append(f"- 제목 후보: {item}")
         lines.append("")
         lines.append(metadata.get("description", ""))
         lines.append("")

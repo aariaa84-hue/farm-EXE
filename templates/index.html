@@ -10,7 +10,7 @@
   <header>
     <div>
       <h1>CleanTube Studio</h1>
-      <p>클린룸 방식으로 새로 만든 영상 제작 보조 MVP</p>
+      <p>로그인 없이 바로 사용하는 로컬 영상 제작 보조 프로그램</p>
     </div>
     <button id="saveBtn">프로젝트 저장</button>
   </header>
@@ -28,7 +28,7 @@
           <option>교육형</option>
         </select>
       </label>
-      <label>목표 길이(초) <input id="duration" type="number" value="60"></label>
+      <label>목표 길이(초) <input id="duration" type="number" value="60" min="15"></label>
       <button id="generateScript">대본 생성</button>
     </section>
 
@@ -51,16 +51,16 @@
       <button id="generateMeta">제목·설명·태그 생성</button>
       <button id="exportMd">제작 계획 Markdown 내보내기</button>
       <button id="exportSrt">자막 SRT 다운로드</button>
+      <button id="ttsBtn" disabled>TTS 만들기</button>
+      <small id="ttsStatus"></small>
       <textarea id="metaPreview" rows="10"></textarea>
     </section>
 
     <section class="card">
       <h2>설정</h2>
-      <label>API Base URL <input id="apiBase"></label>
-      <label>API Key <input id="apiKey" type="password"></label>
-      <label>Model <input id="model"></label>
+      <label>ElevenLabs API Key (선택) <input id="elevenlabsApiKey" type="password" autocomplete="off"></label>
       <button id="saveSettings">설정 저장</button>
-      <small>키가 없으면 로컬 템플릿 결과를 사용합니다.</small>
+      <small>키를 입력하지 않아도 프로그램은 실행됩니다. 키가 없으면 TTS만 비활성화됩니다.</small>
     </section>
   </main>
 
