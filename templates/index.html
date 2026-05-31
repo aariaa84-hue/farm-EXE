@@ -1,69 +1,135 @@
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CleanTube Studio</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <header>
-    <div>
-      <h1>CleanTube Studio</h1>
-      <p>로그인 없이 바로 사용하는 로컬 영상 제작 보조 프로그램</p>
-    </div>
-    <button id="saveBtn">프로젝트 저장</button>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CleanTube Studio</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">CleanTube Studio</p>
+            <h1>영상 제작</h1>
+          </div>
+          <div class="status" id="status">대기 중</div>
+        </header>
 
-  <main>
-    <section class="card">
-      <h2>1. 기본 정보</h2>
-      <label>주제 <input id="topic" placeholder="예: AI 시대의 공부법"></label>
-      <label>장르/톤
-        <select id="genre">
-          <option>정보형</option>
-          <option>스토리텔링</option>
-          <option>코미디</option>
-          <option>시네마틱</option>
-          <option>교육형</option>
-        </select>
-      </label>
-      <label>목표 길이(초) <input id="duration" type="number" value="60" min="15"></label>
-      <button id="generateScript">대본 생성</button>
-    </section>
+        <form id="videoForm" class="creator">
+          <section class="script-panel">
+            <label for="script">최종 대본</label>
+            <textarea id="script" name="script" rows="16" placeholder="완성된 대본을 여기에 붙여넣으세요."></textarea>
+          </section>
 
-    <section class="card">
-      <h2>2. 대본/장면</h2>
-      <input id="title" placeholder="영상 제목">
-      <textarea id="scriptPreview" rows="14" placeholder="생성된 장면이 여기에 표시됩니다."></textarea>
-      <button id="generatePrompts">비주얼 프롬프트 생성</button>
-    </section>
+          <aside class="settings-panel">
+            <div class="field">
+              <label for="elevenlabs_key">ElevenLabs API 키</label>
+              <input id="elevenlabs_key" name="elevenlabs_key" type="password" autocomplete="off" placeholder="선택 입력" />
+              <p class="hint" id="ttsHint">키를 입력하지 않으면 TTS는 비활성화되고 무음 영상으로 생성됩니다.</p>
+            </div>
 
-    <section class="card">
-      <h2>3. 비주얼 프롬프트</h2>
-      <label>스타일 <input id="style" value="clean Korean explainer animation"></label>
-      <label>화면비 <select id="ratio"><option>9:16</option><option>16:9</option><option>1:1</option></select></label>
-      <textarea id="promptPreview" rows="12"></textarea>
-    </section>
+            <div class="field">
+              <label for="voice_id">Voice ID</label>
+              <input id="voice_id" name="voice_id" type="text" value="21m00Tcm4TlvDq8ikWAM" />
+            </div>
 
-    <section class="card">
-      <h2>4. 메타데이터/내보내기</h2>
-      <button id="generateMeta">제목·설명·태그 생성</button>
-      <button id="exportMd">제작 계획 Markdown 내보내기</button>
-      <button id="exportSrt">자막 SRT 다운로드</button>
-      <button id="ttsBtn" disabled>TTS 만들기</button>
-      <small id="ttsStatus"></small>
-      <textarea id="metaPreview" rows="10"></textarea>
-    </section>
+            <div class="field">
+              <label for="images">이미지 업로드</label>
+              <input id="images" name="images" type="file" accept="image/*" multiple />
+              <p class="hint">이미지가 없으면 배경 슬라이드와 대본 텍스트로 임시 영상을 만듭니다.</p>
+            </div>
 
-    <section class="card">
-      <h2>설정</h2>
-      <label>ElevenLabs API Key (선택) <input id="elevenlabsApiKey" type="password" autocomplete="off"></label>
-      <button id="saveSettings">설정 저장</button>
-      <small>키를 입력하지 않아도 프로그램은 실행됩니다. 키가 없으면 TTS만 비활성화됩니다.</small>
-    </section>
-  </main>
+            <div class="split">
+              <div class="field">
+                <label for="wrap_chars">자막 줄바꿈</label>
+                <input id="wrap_chars" name="wrap_chars" type="number" min="10" max="80" value="24" />
+              </div>
 
-  <script src="/static/app.js"></script>
-</body>
+              <div class="field">
+                <label for="ratio">화면 비율</label>
+                <select id="ratio" name="ratio">
+                  <option value="16:9">가로 16:9</option>
+                  <option value="9:16">세로 9:16</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="checkbox">
+              <input id="include_subtitles" name="include_subtitles" type="checkbox" checked />
+              <span>자막 포함</span>
+            </label>
+
+            <button type="submit" id="createButton">MP4 영상 생성</button>
+          </aside>
+        </form>
+
+        <section class="result" id="result" hidden>
+          <div>
+            <strong id="resultTitle">생성 완료</strong>
+            <p id="resultMessage"></p>
+          </div>
+          <div class="downloads">
+            <a id="downloadLink" href="#" download>MP4 다운로드</a>
+            <a id="audioLink" href="#" download hidden>MP3 다운로드</a>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("videoForm");
+      const statusEl = document.getElementById("status");
+      const result = document.getElementById("result");
+      const resultMessage = document.getElementById("resultMessage");
+      const downloadLink = document.getElementById("downloadLink");
+      const audioLink = document.getElementById("audioLink");
+      const button = document.getElementById("createButton");
+      const apiKey = document.getElementById("elevenlabs_key");
+      const ttsHint = document.getElementById("ttsHint");
+
+      apiKey.addEventListener("input", () => {
+        ttsHint.textContent = apiKey.value.trim()
+          ? "키가 있으면 ElevenLabs 음성을 mp3로 만든 뒤 영상에 합칩니다."
+          : "키를 입력하지 않으면 TTS는 비활성화되고 무음 영상으로 생성됩니다.";
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        result.hidden = true;
+        statusEl.textContent = "생성 중";
+        button.disabled = true;
+        button.textContent = "생성 중...";
+
+        try {
+          const response = await fetch("/api/create-video", {
+            method: "POST",
+            body: new FormData(form),
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) {
+            throw new Error(payload.message || "영상 생성에 실패했습니다.");
+          }
+
+          statusEl.textContent = "완료";
+          resultMessage.textContent = payload.message;
+          downloadLink.href = payload.download_url;
+          audioLink.hidden = !payload.audio_url;
+          audioLink.href = payload.audio_url || "#";
+          result.hidden = false;
+        } catch (error) {
+          statusEl.textContent = "오류";
+          resultMessage.textContent = error.message;
+          downloadLink.href = "#";
+          audioLink.hidden = true;
+          audioLink.href = "#";
+          result.hidden = false;
+        } finally {
+          button.disabled = false;
+          button.textContent = "MP4 영상 생성";
+        }
+      });
+    </script>
+  </body>
 </html>

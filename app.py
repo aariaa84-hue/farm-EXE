@@ -1,32 +1,58 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict
+import os
+import socket
 import sys
 import threading
+import uuid
 import webbrowser
+from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, render_template, request, send_from_directory
+from werkzeug.utils import secure_filename
 
-from services.ai import generate_metadata, generate_script, generate_visual_prompts
-from services.config import load_settings, save_settings
-from services.media import build_srt, export_markdown
-from services.projects import list_projects, save_project
-from services.tts import get_tts_status
+from services.video_maker import VideoBuildError, build_video
 
 
-def resource_path(relative: str) -> str:
-    """Return a path that works both in source mode and PyInstaller one-file mode."""
-    base = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
-    return str(Path(base) / relative)
-
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+EXPORTS_DIR = APP_DIR / "exports"
+UPLOADS_DIR = APP_DIR / "work" / "uploads"
+EXPORTS_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(
     __name__,
-    template_folder=resource_path("templates"),
-    static_folder=resource_path("static"),
+    template_folder=str(RESOURCE_DIR / "templates"),
+    static_folder=str(RESOURCE_DIR / "static"),
 )
-app.config["JSON_AS_ASCII"] = False
+app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+DEFAULT_PORT = 5055
+
+
+def _truthy(value: str | None) -> bool:
+    return value in {"1", "true", "on", "yes"}
+
+
+def _save_images(files) -> list[Path]:
+    saved: list[Path] = []
+    batch_dir = UPLOADS_DIR / uuid.uuid4().hex
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    for file in files:
+        if not file or not file.filename:
+            continue
+        original_name = secure_filename(file.filename)
+        suffix = Path(original_name).suffix.lower()
+        if suffix not in ALLOWED_IMAGE_EXTENSIONS:
+            continue
+        destination = batch_dir / f"{uuid.uuid4().hex}{suffix}"
+        file.save(destination)
+        saved.append(destination)
+
+    return saved
 
 
 @app.get("/")
@@ -34,107 +60,83 @@ def index():
     return render_template("index.html")
 
 
-@app.get("/api/settings")
-def api_settings_get():
-    return jsonify(load_settings(mask=True))
+@app.post("/api/create-video")
+def create_video():
+    script = request.form.get("script", "").strip()
+    if not script:
+        return jsonify({"ok": False, "message": "최종 대본을 입력해주세요."}), 400
 
+    try:
+        wrap_chars = max(10, min(80, int(request.form.get("wrap_chars", "24"))))
+    except ValueError:
+        wrap_chars = 24
 
-@app.post("/api/settings")
-def api_settings_post():
-    payload = request.get_json(force=True, silent=True) or {}
-    save_settings(payload)
-    return jsonify({"ok": True, "settings": load_settings(mask=True), "tts": get_tts_status()})
+    ratio = request.form.get("ratio", "16:9")
+    if ratio not in {"16:9", "9:16"}:
+        ratio = "16:9"
 
+    elevenlabs_key = request.form.get("elevenlabs_key", "").strip()
+    voice_id = request.form.get("voice_id", "").strip() or "21m00Tcm4TlvDq8ikWAM"
+    include_subtitles = _truthy(request.form.get("include_subtitles"))
+    image_paths = _save_images(request.files.getlist("images"))
 
-@app.get("/api/tts/status")
-def api_tts_status():
-    return jsonify(get_tts_status())
+    output_name = f"cleantube_{uuid.uuid4().hex[:10]}.mp4"
+    output_path = EXPORTS_DIR / output_name
 
+    try:
+        result = build_video(
+            script=script,
+            output_path=output_path,
+            image_paths=image_paths,
+            aspect_ratio=ratio,
+            wrap_chars=wrap_chars,
+            include_subtitles=include_subtitles,
+            elevenlabs_api_key=elevenlabs_key,
+            elevenlabs_voice_id=voice_id,
+        )
+    except VideoBuildError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
 
-@app.post("/api/tts")
-def api_tts():
-    status = get_tts_status()
-    if not status["enabled"]:
-        return jsonify(status), 400
     return jsonify(
         {
-            "enabled": True,
-            "message": "ElevenLabs API 키가 저장되어 있습니다. 이 클린룸 MVP에서는 실제 음성 생성 대신 프로젝트 내보내기 자료를 먼저 준비합니다.",
+            "ok": True,
+            "message": result.message,
+            "download_url": f"/exports/{output_name}",
+            "audio_url": f"/exports/{result.audio_filename}" if result.audio_filename else None,
+            "tts_enabled": result.tts_enabled,
+            "used_uploaded_images": bool(image_paths),
         }
     )
 
 
-@app.get("/api/projects")
-def api_projects():
-    return jsonify({"projects": list_projects()})
+@app.get("/exports/<path:filename>")
+def download_export(filename: str):
+    return send_from_directory(EXPORTS_DIR, filename, as_attachment=True)
 
 
-@app.post("/api/script")
-def api_script():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    topic = payload.get("topic", "").strip()
-    if not topic:
-        return jsonify({"error": "topic is required"}), 400
-    genre = payload.get("genre", "정보형")
-    duration = int(payload.get("duration_sec") or 60)
-    script = generate_script(topic=topic, genre=genre, duration_sec=duration)
-    return jsonify(script)
+def _find_available_port(start_port: int) -> int:
+    port = start_port
+    while port < 65535:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                port += 1
+                continue
+            return port
+    raise RuntimeError("사용 가능한 로컬 포트를 찾지 못했습니다.")
 
 
-@app.post("/api/prompts")
-def api_prompts():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    scenes = payload.get("scenes", [])
-    style = payload.get("style", "clean Korean explainer animation")
-    ratio = payload.get("ratio", "9:16")
-    prompts = generate_visual_prompts(scenes=scenes, style=style, ratio=ratio)
-    return jsonify({"visual_prompts": prompts})
-
-
-@app.post("/api/metadata")
-def api_metadata():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    metadata = generate_metadata(
-        title=payload.get("title", "영상 제목"),
-        topic=payload.get("topic", ""),
-        scenes=payload.get("scenes", []),
-    )
-    return jsonify(metadata)
-
-
-@app.post("/api/save")
-def api_save():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    project = save_project(payload)
-    return jsonify({"ok": True, "project": project})
-
-
-@app.post("/api/export/markdown")
-def api_export_markdown():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    project = save_project(payload)
-    title = project.get("title") or project.get("topic") or "project"
-    safe = "".join(ch if ch.isalnum() or ch in "-_가-힣" else "_" for ch in title)[:50]
-    path = Path("exports") / f"{safe}-{project['id'][:8]}.md"
-    export_markdown(project, path)
-    return jsonify({"ok": True, "path": str(path)})
-
-
-@app.post("/api/export/srt")
-def api_export_srt():
-    payload: Dict = request.get_json(force=True, silent=True) or {}
-    srt = build_srt(payload.get("scenes", []), int(payload.get("duration_sec") or 60))
-    path = Path("exports") / "subtitles.srt"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(srt, encoding="utf-8")
-    return send_file(path, as_attachment=True, download_name="subtitles.srt")
-
-
-def open_browser_once() -> None:
-    webbrowser.open("http://127.0.0.1:5055")
+def _open_browser(port: int) -> None:
+    if os.environ.get("CLEANTUBE_NO_BROWSER") == "1":
+        return
+    url = f"http://127.0.0.1:{port}"
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
 
 if __name__ == "__main__":
-    # debug=False avoids the auto-reloader opening two browser windows.
-    threading.Timer(1.0, open_browser_once).start()
-    app.run(host="127.0.0.1", port=5055, debug=False)
+    requested_port = int(os.environ.get("PORT", str(DEFAULT_PORT)))
+    port = _find_available_port(requested_port)
+    print(f"CleanTube Studio running at http://127.0.0.1:{port}")
+    _open_browser(port)
+    app.run(host="127.0.0.1", port=port, debug=False)
